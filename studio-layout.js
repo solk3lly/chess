@@ -39,7 +39,7 @@ function BoardArea() {
     h("div", { className: "board-status" },
       h("span", { className: "turn-dot", id: "turn-dot", "data-color": "white", "aria-hidden": "true" }),
       h("span", { id: "board-status", role: "status" }, "Loading board…"),
-      h(Button, { type: "button", className: "return-button", id: "return-to-game", hidden: true, variant: "outline" },
+      h(Button, { type: "button", className: "return-button", id: "return-to-game", hidden: true, variant: "outline", "aria-label": "Return to game" },
         h(Icon, { name: "arrow-u-up-left" }),
         h("span", null, "Return to game")
       ),
@@ -93,7 +93,8 @@ function PlayPanel() {
             h("div", { className: "difficulty-card-head" },
               h("div", { className: "difficulty-card-title" },
                 h("span", { className: "difficulty-caption" }, "Bot difficulty"),
-                h("strong", { id: "difficulty-active-label", className: "difficulty-active-label" }, "Standard")
+                h("strong", { id: "difficulty-active-label", className: "difficulty-active-label" }, "Standard"),
+                h("span", { id: "difficulty-time", className: "difficulty-caption" })
               ),
               h(Button, { type: "button", id: "difficulty-reset", className: "icon-button difficulty-reset", "aria-label": "Reset bot and difficulty to default", title: "Reset bot and difficulty", variant: "ghost", size: "icon" },
                 h(Icon, { name: "arrow-clockwise" })
@@ -144,6 +145,10 @@ function PlayPanel() {
         h("span", null, "Retry bot")
       )
     ),
+    h(Alert, { id: "match-conflict", className: "notice", hidden: true },
+      h("p", { role: "status" }, "Another tab changed the saved match. Reload to continue that match."),
+      h(Button, { type: "button", id: "reload-match", variant: "outline" }, "Reload saved match")
+    ),
     h(ButtonGroup, { className: "action-row play-actions" },
       h(Button, { type: "button", id: "new-game", variant: "default" },
         h(Icon, { name: "plus" }),
@@ -157,6 +162,7 @@ function PlayPanel() {
         h(Icon, { name: "flag" }),
         h("span", null, "Resign")
       ),
+      h(Button, { type: "button", id: "claim-draw", variant: "outline", hidden: true }, "Claim draw"),
       h(Button, { type: "button", id: "past-reviews", hidden: true, variant: "outline" },
         h(Icon, { name: "clock-counter-clockwise" }),
         h("span", null, "Past reviews")

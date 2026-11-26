@@ -15,15 +15,18 @@ Open [Chess Studio](http://127.0.0.1:8080/). The UI runtime, board library, and 
 ## Play, review, and practice
 
 - In **Play**, move on the board or enter coordinates such as `e2e4`. Choose a bot profile and adjust its search effort with the difficulty slider. You can also choose your side and bot in **Settings**. The game resumes after a reload.
-- **Rookie · 250 Elo target** sometimes chooses a weaker legal move for beginner practice. The number is a practice target pending calibration. The other named presets use Stockfish's built-in Elo setting, and their strength varies with search effort.
+- **Rookie · 250 Elo target** sometimes chooses a weaker legal move for beginner practice. It takes a legal mate in one when available. The number is a practice target pending calibration. The other named presets pass an Elo target to Stockfish. The difficulty slider shows the search time per move. Actual strength varies with the search time, engine build, and device. [Stockfish strength settings](https://official-stockfish.github.io/docs/stockfish-wiki/Stockfish-FAQ.html#how-do-skill-level-and-uci-elo-work)
+- On your turn, **Claim draw** appears when the position already qualifies by threefold repetition or the 50-move rule, or when a legal move would qualify. An intended move is recorded in the claim without being played. Fivefold repetition and the 75-move rule end the match automatically. The practice opponent plays on through optional claims. [FIDE Laws of Chess, Article 9](https://handbook.fide.com/chapter/E012023)
 - After checkmate, a draw, or resignation, Play opens a results dialog with your move counts. Choose **Game Review** to replay while Stockfish evaluates positions. Use **Analysis** for the selected move and its alternatives, **Moves** to jump to any move, and **Accuracy** to see the game summary. **Past reviews** in Play opens your archive.
 - Choose **Practice** in a move’s analysis to return to the board just before that move. Try a legal move, reveal a hint, or reset the board. The **Practice** page lists positions you saved.
+
+Choose a **Board** and **Pieces** independently in Settings. The same appearance applies to Play, Game Review, and Practice, including the promotion choices. [Artwork credits and licenses](assets/THEME-CREDITS.md).
 
 The move accuracy estimate measures how much the evaluation dropped from Stockfish's preferred move, using the mover's perspective. **Your game accuracy** averages the player's move percentages. The review flags a lost advantage when the preferred line scores at least 60% on the app's winning-chance scale and the played move falls to 55% or lower. Explanations describe features visible on the board and use short Stockfish lines to show what could follow.
 
 Chess Studio calls a move **Brilliant** when Stockfish prefers it by a clear margin, the line keeps an advantage, and its reply and follow-up show an accepted sacrifice worth at least a minor piece.
 
-Preferences use local storage. The ongoing game, completed games, reviews, and saved practice positions use IndexedDB. The app has no review quota. Data stays in the same browser profile and site origin until the browser clears it.
+Preferences use local storage. The ongoing game, completed games, reviews, and saved practice positions use IndexedDB. If another tab saves a newer match, choose **Reload saved match** to continue from that revision. The app has no review quota. Data stays in the same browser profile and site origin until the browser clears it.
 
 ## Interface components
 

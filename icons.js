@@ -53,8 +53,3 @@ export function gradeBadge(grade, label = grade, doc = document) {
   badge.append(text);
   return badge;
 }
-
-export function promotionPieceSrc(color, role) {
-  const prefix = color === 'black' ? 'b' : 'w';
-  return `./assets/pieces/2d/cburnett/${prefix}${role.toUpperCase()}.svg`;
-}

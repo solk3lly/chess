@@ -5,8 +5,9 @@ import {
   DialogFooter, DialogHeader, DialogTitle, Icon, Label, NativeSelect, NativeSelectOption, Slider,
 } from './ui/shadcn.js';
 import { renderUI } from './ui/render.js';
-import { OUTCOME_ICONS, promotionPieceSrc } from './icons.js';
-import { BOT_PROFILES, DIFFICULTY_ORDER, LEVELS } from './studio-game.js';
+import { BOARD_THEMES, PIECE_THEMES, pieceImageSrc } from './board-themes.js';
+import { OUTCOME_ICONS } from './icons.js';
+import { BOT_PROFILES, DIFFICULTY_ORDER, LEVELS, botSearchTime } from './studio-game.js';
 import { sliderMarkers } from './studio-widgets.js';
 
 let activeDialog = null;
@@ -41,10 +42,11 @@ function CloseButton({ close, label }) {
     h(Icon, { name: 'x' }));
 }
 
-function SelectField({ name, label, options, value, autoFocus }) {
-  return h('div', { className: name === 'bot' ? 'field settings-bot' : 'field' },
+function SelectField({ name, label, options, value, autoFocus, onChange }) {
+  const fullWidth = name === 'bot' || name === 'board' || name === 'pieces';
+  return h('div', { className: fullWidth ? 'field settings-wide' : 'field' },
     h(Label, { htmlFor: 'settings-' + name }, label),
-    h(NativeSelect, { name, id: 'settings-' + name, defaultValue: value, autoFocus },
+    h(NativeSelect, { name, id: 'settings-' + name, defaultValue: value, autoFocus, onChange },
       options.map(([key, text]) => h(NativeSelectOption, { key, value: key }, text))));
 }
 
@@ -55,11 +57,11 @@ const botField = ['bot', 'Bot profile', Object.entries(BOT_PROFILES).map(([key, 
 const settingsFields = [
   ['color', 'Play as', [['white', 'White'], ['black', 'Black']]],
   ['theme', 'Theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]],
-  ['board', 'Board', [['brown', 'Walnut'], ['wood', 'Wood grain'], ['blue', 'Blue']]],
-  ['pieces', 'Pieces', [['2d', 'Classic'], ['3d', 'Sculpted']]],
+  ['board', 'Board', Object.entries(BOARD_THEMES).map(([key, theme]) => [key, theme.label])],
+  ['pieces', 'Pieces', Object.entries(PIECE_THEMES).map(([key, theme]) => [key, theme.label])],
 ];
 
-function SettingsDifficulty({ index, setIndex }) {
+function SettingsDifficulty({ index, setIndex, bot }) {
   const difficulty = DIFFICULTY_ORDER[index];
   const label = LEVELS[difficulty].label;
   return h('div', { className: 'field settings-difficulty' },
@@ -73,11 +75,13 @@ function SettingsDifficulty({ index, setIndex }) {
     }),
     h('input', { type: 'hidden', name: 'difficulty', value: difficulty }),
     h('div', { className: 'stepped-slider-labels', 'aria-hidden': true },
-      DIFFICULTY_ORDER.map(key => h('span', { key }, LEVELS[key].label))));
+      DIFFICULTY_ORDER.map(key => h('span', { key }, LEVELS[key].label))),
+    h('small', { className: 'muted' }, botSearchTime(difficulty, bot)));
 }
 
 function SettingsContent({ id, close, initial }) {
   const [index, setIndex] = useState(DIFFICULTY_ORDER.indexOf(initial.difficulty));
+  const [bot, setBot] = useState(initial.bot);
   function save(event) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -85,6 +89,7 @@ function SettingsContent({ id, close, initial }) {
   }
   const field = ([name, label, options]) => h(SelectField, {
     key: name, name, label, options, value: initial[name], autoFocus: name === 'color',
+    onChange: name === 'bot' ? event => setBot(event.target.value) : undefined,
   });
   return h(DialogContent, { id },
     h('form', { onSubmit: save },
@@ -93,7 +98,7 @@ function SettingsContent({ id, close, initial }) {
       h(DialogDescription, null, 'Preferences stay in this browser. Bot settings update immediately; side color applies to your next game.'),
       h('div', { className: 'settings-grid' },
         field(botField),
-        h(SettingsDifficulty, { index, setIndex }),
+        h(SettingsDifficulty, { index, setIndex, bot }),
         settingsFields.map(field),
         h('div', { className: 'check-field' },
           h(Checkbox, { id: 'settings-sound', name: 'sound', defaultChecked: initial.sound }),
@@ -109,9 +114,24 @@ function ConfirmContent({ id, close, title, description, label }) {
       h(AlertDialogAction, { onClick: () => close(true) }, label)));
 }
 
+function DrawClaimContent({ id, close, moves }) {
+  return h(DialogContent, { id },
+    h('form', { onSubmit: event => {
+      event.preventDefault();
+      close(new FormData(event.currentTarget).get('intendedMove'));
+    } },
+    h(DialogHeader, { className: 'dialog-heading' },
+      h(DialogTitle, null, 'Claim a draw'), h(CloseButton, { close, label: 'Cancel draw claim' })),
+    h(DialogDescription, null, 'Choose the move that would qualify. A successful claim ends the game before that move is played.'),
+    h(SelectField, { name: 'intendedMove', label: 'Intended move', value: moves[0].uci,
+      options: moves.map(move => [move.uci, `${move.san} · ${move.reason}`]) }),
+    h(DialogFooter, { className: 'action-row' },
+      h(Button, { type: 'submit' }, 'Claim draw'))));
+}
+
 const promotions = { q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' };
 
-function PromotionContent({ id, close, color }) {
+function PromotionContent({ id, close, color, pieces }) {
   return h(DialogContent, { id },
     h(DialogHeader, { className: 'dialog-heading' },
       h(DialogTitle, null, 'Promote pawn'), h(CloseButton, { close, label: 'Cancel promotion' })),
@@ -119,7 +139,7 @@ function PromotionContent({ id, close, color }) {
     h(ButtonGroup, { className: 'action-row promotion-actions' },
       Object.entries(promotions).map(([key, label]) => h(Button, {
         key, variant: 'outline', className: 'promotion-option', autoFocus: key === 'q', onClick: () => close(key),
-      }, h('img', { className: 'promotion-piece', src: promotionPieceSrc(color, key), alt: '' }), label))));
+      }, h('img', { className: 'promotion-piece', src: pieceImageSrc(pieces, color, key), alt: '' }), label))));
 }
 
 function GameOverContent({ id, close, title, reason, outcome, openReview, retry }) {
@@ -143,5 +163,6 @@ function GameOverContent({ id, close, title, reason, outcome, openReview, retry 
 
 export const showSettingsDialog = initial => openDialog('settings-dialog', SettingsContent, { initial });
 export const confirmAction = (title, description, label) => openDialog('confirm-dialog', ConfirmContent, { title, description, label }, true);
-export const choosePromotion = color => openDialog('promotion-dialog', PromotionContent, { color });
+export const chooseDrawMove = moves => openDialog('draw-claim-dialog', DrawClaimContent, { moves });
+export const choosePromotion = (color, pieces) => openDialog('promotion-dialog', PromotionContent, { color, pieces });
 export const showGameOverDialog = props => openDialog('game-over-dialog', GameOverContent, props);

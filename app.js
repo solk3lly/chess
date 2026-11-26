@@ -1,14 +1,15 @@
 import { Chessground } from 'https://cdn.jsdelivr.net/npm/@lichess-org/chessground@10.1.0/dist/chessground.min.js';
 import { compat, fen, san } from './vendor/chessops.bundle.js';
+import { applyBoardTheme } from './board-themes.js';
 import { detectCapture, standardUci } from './game-state.js';
 import { Engine } from './engine.js';
 import { OUTCOME_ICONS, gradeBadge, icon } from './icons.js';
 import { DEFAULT_SETTINGS, openStore, preferences, readLocal, saveGame, savePreferences, writeLocal } from './local-store.js';
-import { analyzeGame, practiceFeedback, REVIEW_VERSION, summarize, winningChance } from './review.js';
+import { analyzeGame, practiceEstimate, practiceFeedback, REVIEW_VERSION, summarize } from './review.js';
 import { renderAccuracy, renderGameOverCounts, showReviewDetail } from './review-view.js';
 import {
-  BOT_PROFILES, DIFFICULTY_ORDER, LEVELS, botSearchConfig,
-  fenAt, legalMove, needsPromotion, newGame, opposite, playMove,
+  BOT_PROFILES, DIFFICULTY_ORDER, LEVELS, botSearchConfig, botSearchTime,
+  claimDraw, drawClaims, fenAt, legalMove, needsPromotion, newGame, opposite, playMove,
   positionAt, positionFromFen, resign, rookieMove, setDifficulty, undoTurn, validExercise, validGame,
 } from './studio-game.js';
 import {
@@ -18,7 +19,7 @@ import {
 
 import { mountStudio } from './studio-layout.js';
 import { applyButtonVariant } from './ui/button.js';
-import { choosePromotion, closeDialog, confirmAction, isDialogOpen, showGameOverDialog, showSettingsDialog } from './studio-dialogs.js';
+import { chooseDrawMove, choosePromotion, closeDialog, confirmAction, isDialogOpen, showGameOverDialog, showSettingsDialog } from './studio-dialogs.js';
 import { activateReviewTab, bindDifficultyPicker, closeDifficultyPopover, renderProgress, renderReplay, renderSlider, sliderMarkers } from './studio-widgets.js';
 
 mountStudio();
@@ -27,11 +28,13 @@ const state = {
   mode: 'play', settings: DEFAULT_SETTINGS, db: null, game: null, games: new Map(),
   reviews: new Map(), review: { id: null, ply: 1, variation: null }, pendingResultId: null,
   practice: new Map(), exercise: null, attempt: null, flipped: false, promoting: false,
+  matchRevision: null, savingMatch: false, matchConflict: false,
 };
 const EMPTY_REVIEW = { rows: [], error: '' };
 const darkMode = matchMedia('(prefers-color-scheme: dark)');
 const gameDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const singleColumn = matchMedia('(max-width: 760px)');
+const landscapeReview = matchMedia('(531px <= width <= 760px) and (orientation: landscape)');
 const boardShell = byId('chessground');
 const board = Chessground(boardShell, {
   coordinates: true,
@@ -61,8 +64,7 @@ function persist(write) {
 function applySettings() {
   const { theme, board: boardStyle, pieces } = state.settings;
   document.documentElement.dataset.theme = theme === 'system' ? (darkMode.matches ? 'dark' : 'light') : theme;
-  boardShell.dataset.boardStyle = boardStyle;
-  boardShell.dataset.pieceStyle = pieces;
+  applyBoardTheme(boardShell, boardStyle, pieces);
 }
 
 function activeBotChoice() {
@@ -75,6 +77,7 @@ function renderDifficultySlider(difficulty) {
   const value = DIFFICULTY_ORDER.indexOf(difficulty);
   const label = LEVELS[difficulty].label;
   setText('difficulty-active-label', label);
+  setText('difficulty-time', botSearchTime(difficulty, activeBotChoice().bot));
   for (const step of byId('difficulty-slider-view').querySelectorAll('[data-difficulty-step]')) {
     step.dataset.active = String(step.dataset.difficultyStep === difficulty);
   }
@@ -195,7 +198,8 @@ function difficultyPickerChanged(open) {
   }
 }
 
-function applyBotSelection(difficulty, bot) {
+async function applyBotSelection(difficulty, bot) {
+  if (!canChangeMatch()) return renderPlayIfActive();
   if (state.settings.difficulty !== difficulty || state.settings.bot !== bot) {
     state.settings = { ...state.settings, difficulty, bot };
     try {
@@ -208,8 +212,7 @@ function applyBotSelection(difficulty, bot) {
   if (next !== state.game) {
     cancelBot();
     botError = '';
-    updateGame(next);
-    void requestBot();
+    if (await updateGame(next)) void requestBot();
   } else {
     renderPlayIfActive();
   }
@@ -232,9 +235,9 @@ async function settingsDialog() {
   const colorChanged = state.settings.color !== previous.color;
   const botChanged = state.settings.difficulty !== active.difficulty || state.settings.bot !== active.bot;
   if (colorChanged && !state.game.moves.length) {
-    startGame();
+    await startGame();
   } else if (botChanged) {
-    applyBotSelection(state.settings.difficulty, state.settings.bot);
+    await applyBotSelection(state.settings.difficulty, state.settings.bot);
   } else {
     renderPlayIfActive();
   }
@@ -245,8 +248,9 @@ function playPosition() {
   const position = positionAt(game, game.moves.length);
   if (game.outcome) return { position, orientation: game.human, text: outcomeTitle(game), last: game.moves.at(-1)?.uci };
   const humanTurn = position.turn === game.human;
-  const text = humanTurn ? `Your turn · ${capitalize(game.human)}` : (botError ? 'Stockfish paused' : 'Stockfish to move');
-  return { position, orientation: game.human, text, last: game.moves.at(-1)?.uci, canMove: humanTurn };
+  const turn = humanTurn ? `Your turn · ${capitalize(game.human)}` : (botError ? 'Stockfish paused' : 'Stockfish to move');
+  const text = state.matchConflict ? 'Saved match changed' : turn;
+  return { position, orientation: game.human, text, last: game.moves.at(-1)?.uci, canMove: humanTurn && canChangeMatch() };
 }
 
 function reviewPosition() {
@@ -310,6 +314,11 @@ function moveError(message = '') {
   show('move-error', Boolean(message));
 }
 
+function clearMoveInput() {
+  byId('move-input').value = '';
+  moveError();
+}
+
 async function enterMove(uci) {
   if (state.promoting) return;
   const originalMode = state.mode;
@@ -319,7 +328,7 @@ async function enterMove(uci) {
   if (needsPromotion(view.position, uci)) {
     state.promoting = true;
     renderBoard();
-    const choice = await choosePromotion(view.position.turn);
+    const choice = await choosePromotion(view.position.turn, state.settings.pieces);
     state.promoting = false;
     if (!choice) return renderBoard();
     uci += choice;
@@ -329,9 +338,8 @@ async function enterMove(uci) {
     moveError('Enter a legal move, for example e2e4.');
     return renderBoard();
   }
-  moveError();
-  byId('move-input').value = '';
-  if (originalMode === 'play') recordMove(uci);
+  clearMoveInput();
+  if (originalMode === 'play') await recordMove(uci);
   else attemptPractice(view.position, move);
 }
 
@@ -353,6 +361,11 @@ function outcomeTitle(game, compact = false) {
   return compact ? 'Loss' : 'Stockfish won';
 }
 
+function outcomeReason(game) {
+  const { reason, intendedMove } = game.outcome;
+  return intendedMove ? `${reason} claimed with ${intendedMove}` : reason;
+}
+
 function renderPlay() {
   const { game } = state;
   setText('match-description', `You play ${capitalize(game.human)}`);
@@ -362,12 +375,19 @@ function renderPlay() {
   if (game.outcome) {
     renderOutcomeIcon('result-icon', game);
     setText('result-title', outcomeTitle(game));
-    setText('result-reason', game.outcome.reason);
+    setText('result-reason', outcomeReason(game));
   }
   show('bot-error', Boolean(botError));
   setText('bot-message', botError);
-  byId('undo').disabled = undoTurn(game) === game;
-  byId('resign').disabled = Boolean(game.outcome) || !game.moves.length;
+  show('match-conflict', state.matchConflict);
+  const available = canChangeMatch();
+  byId('difficulty-trigger').disabled = state.matchConflict;
+  byId('new-game').disabled = !available;
+  byId('undo').disabled = !available || undoTurn(game) === game;
+  byId('resign').disabled = !available || Boolean(game.outcome) || !game.moves.length;
+  const claims = drawClaims(game);
+  show('claim-draw', Boolean(claims.now || claims.moves.length));
+  byId('claim-draw').disabled = !available;
   renderPlayedMoves(game.moves);
   renderBoard();
 }
@@ -380,16 +400,43 @@ function cancelBot() {
   playEngine = new Engine();
 }
 
-function updateGame(game) {
+function canChangeMatch() {
+  return !state.savingMatch && !state.matchConflict;
+}
+
+async function updateGame(game) {
+  if (!canChangeMatch()) return false;
+  if (state.db) {
+    state.savingMatch = true;
+    renderPlayIfActive();
+    try {
+      const revision = await saveGame(state.db, game, state.matchRevision);
+      if (revision === null) {
+        state.matchConflict = true;
+        cancelBot();
+        closeDifficultyPopover();
+      } else {
+        state.matchRevision = revision;
+      }
+    } catch {
+      storageWarning();
+    } finally {
+      state.savingMatch = false;
+    }
+    if (state.matchConflict) {
+      renderPlayIfActive();
+      return false;
+    }
+  }
   const justFinished = game.outcome && !state.game.outcome;
   state.game = game;
   if (game.outcome) state.games.set(game.id, game);
-  persist(db => saveGame(db, game));
   renderPlayIfActive();
   if (justFinished) {
     state.pendingResultId = game.id;
     maybeShowGameOver();
   }
+  return true;
 }
 
 function maybeShowGameOver() {
@@ -399,7 +446,7 @@ function maybeShowGameOver() {
   const { game } = state;
   state.pendingResultId = null;
   void showGameOverDialog({
-    title: outcomeTitle(game), reason: game.outcome.reason, outcome: outcomeKind(game),
+    title: outcomeTitle(game), reason: outcomeReason(game), outcome: outcomeKind(game),
     openReview: openCurrentReview, retry: () => requestReview(game),
   });
   renderGameOverCounts(game, reviewProgress(game.id));
@@ -413,24 +460,24 @@ function openCurrentReview() {
   byId('review-title').focus({ preventScroll: true });
 }
 
-function recordMove(uci) {
+async function recordMove(uci) {
   const { game } = state;
+  if (!canChangeMatch()) return;
   const position = positionAt(game, game.moves.length);
   const move = legalMove(position, uci);
   const next = playMove(game, uci);
-  if (!next) return;
-
-  if (state.settings.sound && state.mode === 'play') {
-    const capture = detectCapture(position, move);
-    const name = soundFor(next, capture);
-    void new Audio(`./assets/sound/futuristic/${name}.ogg`).play().catch(() => {});
-  }
-  updateGame(next);
+  if (!next || !await updateGame(next)) return;
+  if (state.mode === 'play') playSound(soundFor(next, detectCapture(position, move)));
   void requestBot();
+}
+
+function playSound(name) {
+  if (state.settings.sound) void new Audio(`./assets/sound/futuristic/${name}.ogg`).play().catch(() => {});
 }
 
 function soundFor(game, capture) {
   if (game.outcome && !game.outcome.winner) return 'Draw';
+  if (game.outcome?.reason === 'Checkmate') return 'Checkmate';
   if (positionAt(game, game.moves.length).isCheck()) return 'Check';
   return capture ? 'Capture' : 'Move';
 }
@@ -449,7 +496,7 @@ function renderPlayIfActive() {
 
 async function requestBot() {
   const { game } = state;
-  if (botRequest || !stockfishTurn(game)) return;
+  if (!canChangeMatch() || botRequest || !stockfishTurn(game)) return;
   const { bot, time, skill, elo, depth, lines = 1 } = botSearchConfig(game.difficulty, game.bot);
   const request = new AbortController();
   botRequest = request;
@@ -464,7 +511,7 @@ async function requestBot() {
     const move = bot === 'elo250' ? rookieMove(position, result) : result.move;
     if (!move || !legalMove(position, move)) throw new Error('Stockfish returned an invalid move.');
     botRequest = null;
-    recordMove(move);
+    await recordMove(move);
   } catch (error) {
     if (request.signal.aborted) return;
     botError = error.message;
@@ -473,13 +520,16 @@ async function requestBot() {
   }
 }
 
-function startGame() {
+async function startGame() {
+  if (!canChangeMatch()) return;
   cancelBot();
   botError = '';
   state.pendingResultId = null;
-  if (state.mode === 'play') state.flipped = false;
-  updateGame(newGame(state.settings));
-  void requestBot();
+  if (state.mode === 'play') {
+    state.flipped = false;
+    clearMoveInput();
+  }
+  if (await updateGame(newGame(state.settings))) void requestBot();
 }
 
 async function askNewGame() {
@@ -489,8 +539,7 @@ async function askNewGame() {
     const confirmed = await confirmAction('Start a new game?', 'Your current game will be discarded.', 'Start new game');
     if (!confirmed) return;
   }
-  moveError();
-  startGame();
+  await startGame();
 }
 
 async function askResign() {
@@ -498,17 +547,31 @@ async function askResign() {
   if (!await confirmAction('Resign this game?', 'You can review the moves you played after resigning.', 'Resign game')) return;
   cancelBot();
   botError = '';
-  updateGame(resign(state.game));
+  const game = resign(state.game);
+  if (game !== state.game) await updateGame(game);
 }
 
-function undo() {
+async function askDrawClaim() {
+  if (!canChangeMatch()) return;
+  const { game } = state;
+  const { now, moves } = drawClaims(game);
+  if (!now && !moves.length) return;
+  const choice = now
+    ? (await confirmAction('Claim a draw?', `This position qualifies for a draw by ${now.toLowerCase()}.`, 'Claim draw') ? '' : undefined)
+    : await chooseDrawMove(moves);
+  if (choice === undefined || state.game !== game) return;
+  const drawn = claimDraw(game, choice);
+  if (drawn !== game && await updateGame(drawn)) playSound('Draw');
+}
+
+async function undo() {
+  if (!canChangeMatch()) return;
   const game = undoTurn(state.game);
   if (game === state.game) return;
   cancelBot();
   botError = '';
-  moveError();
-  updateGame(game);
-  void requestBot();
+  clearMoveInput();
+  if (await updateGame(game)) void requestBot();
 }
 
 function reviewGames() {
@@ -659,7 +722,7 @@ function previewLine(line, game) {
   state.review.variation = { index: 1, steps: [initial, line, ...line.continuation], line };
   renderReview();
   byId('replay-ply').focus({ preventScroll: true });
-  if (singleColumn.matches) byId('board-status').scrollIntoView({ block: 'start' });
+  if (singleColumn.matches && !landscapeReview.matches) byId('board-status').scrollIntoView({ block: 'start' });
 }
 
 function replayTo(ply) {
@@ -712,7 +775,7 @@ function chooseExercise(id) {
 function resetPractice() {
   cancelPractice();
   state.attempt = null;
-  moveError();
+  clearMoveInput();
   show('practice-feedback', false);
   show('practice-hint-text', false);
   if (state.exercise) {
@@ -755,11 +818,7 @@ async function attemptPractice(position, move) {
   try {
     const { lines } = await practiceEngine.search('fen ' + value, { time: 250, signal: request.signal });
     request.signal.throwIfAborted();
-    const chance = 100 - winningChance(lines[0].score);
-    const difference = Math.round(row.before - chance);
-    const message = difference < 3 ? 'Stockfish found this close to the top reviewed move.' :
-      `Stockfish estimated about ${difference} fewer winning-chance points than the top reviewed move.`;
-    setText('practice-feedback', message);
+    setText('practice-feedback', practiceEstimate(row.before, lines[0].score));
   } catch {
     if (!request.signal.aborted) setText('practice-feedback', 'Legal move. Try a reviewed alternative for feedback.');
   } finally {
@@ -788,7 +847,10 @@ const openMode = {
 function switchMode(mode, id, ply) {
   closeDifficultyPopover();
   if (mode !== 'practice') cancelPractice();
-  if (state.mode !== mode) state.flipped = false;
+  if (state.mode !== mode) {
+    clearMoveInput();
+    state.flipped = false;
+  }
   state.mode = mode;
   moveError();
   renderNavigation(mode);
@@ -831,6 +893,8 @@ function bindControls() {
     'new-game': askNewGame,
     'flip-board': () => { state.flipped = !state.flipped; renderBoard(); },
     undo, resign: askResign,
+    'claim-draw': askDrawClaim,
+    'reload-match': () => location.reload(),
     'bot-retry': requestBot,
     'review-open': openCurrentReview,
     'past-reviews': () => switchMode('review'),
@@ -869,7 +933,11 @@ async function restoreGames() {
     readLocal(db, 'games'),
     readLocal(db, 'practice'),
   ]);
-  if (validGame(game)) state.game = game;
+  state.matchRevision = game?.storageRevision ?? null;
+  if (validGame(game)) {
+    const { storageRevision, ...savedGame } = game;
+    state.game = savedGame;
+  }
   state.games = new Map(games.filter(validGame).map(entry => [entry.id, entry]));
   state.practice = new Map(practice.filter(validExercise).map(entry => [entry.id, entry]));
 }

@@ -90,7 +90,7 @@ function describeLine(position, { pv, score }) {
 function terminalChance(game, ply) {
   if (ply !== game.moves.length) return null;
   const { outcome } = game;
-  if (!outcome || outcome.reason === 'Resignation') return null;
+  if (!outcome || outcome.reason === 'Resignation' || outcome.claimed) return null;
   if (!outcome.winner) return 50;
   return outcome.winner === positionAt(game, ply - 1).turn ? 100 : 0;
 }
@@ -199,4 +199,12 @@ export function practiceFeedback(row, uci) {
   }
   if (uci === row.uci) return `This was played in the game and scored ${row.accuracy}% accuracy. ${row.idea}`;
   return null;
+}
+
+export function practiceEstimate(reference, opponentScore) {
+  const estimate = 100 - winningChance(opponentScore);
+  const difference = Math.round(Math.abs(estimate - reference));
+  if (difference < 3) return 'Stockfish found this close to the saved top move.';
+  const direction = estimate > reference ? 'higher' : 'lower';
+  return `Stockfish estimated this move about ${difference} points ${direction} than the saved top move.`;
 }

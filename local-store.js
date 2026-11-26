@@ -1,4 +1,5 @@
 import { BOT_PROFILES, DIFFICULTY_ORDER } from './studio-game.js';
+import { BOARD_THEMES, PIECE_THEMES } from './board-themes.js';
 
 export const DEFAULT_SETTINGS = {
   color: 'white',
@@ -16,8 +17,8 @@ const SETTINGS_OPTIONS = {
   difficulty: DIFFICULTY_ORDER,
   bot: Object.keys(BOT_PROFILES),
   theme: ['system', 'light', 'dark'],
-  board: ['brown', 'wood', 'blue'],
-  pieces: ['2d', '3d'],
+  board: Object.keys(BOARD_THEMES),
+  pieces: Object.keys(PIECE_THEMES),
   sound: [true, false],
 };
 
@@ -34,8 +35,9 @@ export function savePreferences(settings, storage = globalThis.localStorage) {
 
 export function openStore(idb = globalThis.indexedDB) {
   return new Promise((resolve, reject) => {
-    const request = idb.open('chess-studio', 1);
-    request.onupgradeneeded = () => {
+    const request = idb.open('chess-studio', 2);
+    request.onupgradeneeded = event => {
+      if (event.oldVersion !== 0) return;
       const db = request.result;
       for (const name of ['active', 'games', 'reviews', 'practice']) db.createObjectStore(name);
     };
@@ -67,11 +69,20 @@ function write(db, collections, update) {
   });
 }
 
-export function saveGame(db, game) {
-  return write(db, ['active', 'games'], transaction => {
-    transaction.objectStore('active').put(game, 'match');
-    if (game.outcome) transaction.objectStore('games').put(game, game.id);
+export async function saveGame(db, game, expectedRevision) {
+  const revision = crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join('-');
+  let saved = false;
+  await write(db, ['active', 'games'], transaction => {
+    const active = transaction.objectStore('active');
+    const request = active.get('match');
+    request.onsuccess = () => {
+      if ((request.result?.storageRevision ?? null) !== expectedRevision) return;
+      active.put({ ...game, storageRevision: revision }, 'match');
+      if (game.outcome) transaction.objectStore('games').put(game, game.id);
+      saved = true;
+    };
   });
+  return saved ? revision : null;
 }
 
 export function writeLocal(db, collection, key, value) {
