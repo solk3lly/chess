@@ -9,6 +9,63 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@lichess-org/chessground@10.1.0/assets/chessground.base.css" integrity="sha384-Y19gkNp1pMli91IsKOcB/yV6I8CMdolpGLROk0RUXmcn2bBcQZti24DCWQJpvWnO" crossorigin="anonymous">
   <link rel="stylesheet" href="./ui/shadcn.css">
   <link rel="stylesheet" href="./styles.css">
+  <style>
+    body:has(.studio-startup) { min-width: 0; }
+    .studio-startup {
+      display: grid;
+      place-items: center;
+      min-block-size: 100vh;
+      min-block-size: 100dvh;
+      padding: clamp(1rem, 4vmin, 2rem);
+      text-align: center;
+    }
+    .studio-loading {
+      display: grid;
+      justify-items: center;
+      gap: clamp(.75rem, 3vmin, 1.25rem);
+      font: 600 clamp(1.125rem, 1rem + .8vw, 1.5rem)/1.3 Georgia, serif;
+    }
+    .studio-loading p {
+      display: grid;
+      place-items: center;
+      max-inline-size: 32ch;
+      min-block-size: 2.6em;
+      text-wrap: balance;
+    }
+    /* DotsRing from Loading UI, adapted for the initial HTML. See ui/LOADING-UI-LICENSE.txt. */
+    .studio-dots-ring {
+      position: relative;
+      inline-size: clamp(2.75rem, 9vmin, 4rem);
+      aspect-ratio: 1;
+      color: var(--primary);
+    }
+    .studio-dots-ring > span {
+      position: absolute;
+      left: var(--x);
+      top: var(--y);
+      width: 20%;
+      height: 20%;
+      translate: -50% -50%;
+      border-radius: 50%;
+      background: currentColor;
+      animation: loading-ui-dots-ring-pulse 1s linear infinite;
+      animation-delay: calc(.125s * var(--phase));
+    }
+    @keyframes loading-ui-dots-ring-pulse {
+      0%, 100% { opacity: .25; transform: scale(.65); }
+      12.5% { opacity: 1; transform: scale(1); }
+      25% { opacity: .75; transform: scale(.85); }
+      50% { opacity: .35; transform: scale(.7); }
+    }
+    @media (prefers-color-scheme: dark) {
+      .studio-startup { background: #1e211f; color: #f1efe5; }
+      .studio-dots-ring { color: #b6d5b9; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .studio-dots-ring > span { animation: none; }
+    }
+  </style>
+  <noscript><style>#studio-root { display: none; }</style></noscript>
   <script type="importmap">
   {
     "imports": {
@@ -29,9 +86,27 @@
   </script>
 </head>
 <body>
-  <div id="studio-root"><p class="studio">Loading Chess Studio…</p></div>
+  <div id="studio-root">
+    <div class="studio-startup">
+      <div class="studio-loading" role="status">
+        <span class="sr-only">Preparing your chessboard.</span>
+        <span class="studio-dots-ring" aria-hidden="true">
+          <span style="--x: 50%; --y: 16%; --phase: -8"></span>
+          <span style="--x: 74.04%; --y: 25.96%; --phase: -7"></span>
+          <span style="--x: 84%; --y: 50%; --phase: -6"></span>
+          <span style="--x: 74.04%; --y: 74.04%; --phase: -5"></span>
+          <span style="--x: 50%; --y: 84%; --phase: -4"></span>
+          <span style="--x: 25.96%; --y: 74.04%; --phase: -3"></span>
+          <span style="--x: 16%; --y: 50%; --phase: -2"></span>
+          <span style="--x: 25.96%; --y: 25.96%; --phase: -1"></span>
+        </span>
+        <p id="studio-loading-message" aria-hidden="true">Giving the pawns one last pep talk…</p>
+      </div>
+    </div>
+  </div>
   <div id="studio-dialogs"></div>
-  <noscript>Enable JavaScript to play Chess Studio.</noscript>
+  <noscript><p class="studio-startup">Enable JavaScript to play Chess Studio.</p></noscript>
+  <script src="./ui/studio-loading.js" defer></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
