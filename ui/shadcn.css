@@ -1,0 +1,171 @@
+/* Static CSS for the shadcn/ui registry parts in shadcn.js. */
+:root {
+  --radius: .65rem;
+  --input: var(--border);
+  --ring: var(--primary);
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
+  --card-foreground: var(--foreground);
+  --accent-foreground: var(--foreground);
+}
+
+button[data-variant] {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  padding: .4rem .75rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 3px);
+  white-space: nowrap;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+button[data-variant='default'] { background: var(--primary); color: var(--primary-foreground); }
+button[data-variant='default']:hover { background: color-mix(in srgb, var(--primary) 90%, var(--card)); }
+button[data-variant='outline'] { border-color: var(--input); background: var(--card); }
+button:is([data-variant='outline'], [data-variant='ghost']):hover { background: var(--accent); color: var(--accent-foreground); }
+button[data-variant='destructive'] { background: var(--destructive); color: var(--destructive-foreground); }
+button[data-variant='destructive']:hover { background: color-mix(in srgb, var(--destructive) 90%, var(--card)); }
+button[data-size='sm'] { min-height: 2rem; padding: .3rem .6rem; }
+button[data-size='icon'] { width: 2.25rem; padding: 0; flex-shrink: 0; }
+button[data-variant]:disabled { opacity: .5; cursor: default; }
+:is(button[data-variant], [data-slot='input'], [data-slot='native-select'], [data-slot='slider-thumb'], [data-slot='checkbox']):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+[data-slot='card'] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow);
+}
+[data-slot='card-description'], [data-slot='dialog-description'], [data-slot='alert-dialog-description'] { color: var(--muted-foreground); }
+[data-slot='input'], [data-slot='native-select'] {
+  min-width: 0;
+  min-height: 2.25rem;
+  border: 1px solid var(--input);
+  border-radius: calc(var(--radius) - 3px);
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: .875rem;
+}
+[data-slot='input'] { padding: .4rem .7rem; }
+[data-slot='input']::placeholder { color: var(--muted-foreground); }
+[data-slot='native-select-wrapper'] { display: flex; position: relative; width: 100%; min-width: 0; }
+[data-slot='native-select-wrapper']:has(> select[hidden]) { display: none; }
+[data-slot='native-select'] { appearance: none; width: 100%; padding: .4rem 1.8rem .4rem .7rem; }
+.native-select-icon {
+  pointer-events: none;
+  position: absolute;
+  inset-inline-end: .65rem;
+  top: 50%;
+  width: .85rem;
+  height: .85rem;
+  transform: translateY(-50%) rotate(-90deg);
+  color: var(--muted-foreground);
+  fill: currentColor;
+}
+[data-slot='label'] { font-weight: 650; }
+[data-slot='badge'] { display: inline-flex; align-items: center; gap: .3rem; }
+[data-slot='alert'] { color: var(--card-foreground); }
+[data-slot='button-group'] { display: flex; min-width: 0; }
+
+:is([data-slot='dialog-overlay'], [data-slot='alert-dialog-overlay']) {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #1518149c;
+}
+:is([data-slot='dialog-content'], [data-slot='alert-dialog-content']) {
+  position: fixed;
+  z-index: 51;
+  top: 50%;
+  left: 50%;
+  width: min(430px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  transform: translate(-50%, -50%);
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow);
+}
+:is([data-slot='dialog-title'], [data-slot='alert-dialog-title']) { font-size: 1.15rem; font-weight: 650; }
+:is([data-slot='dialog-description'], [data-slot='alert-dialog-description']) { margin: 6px 0 14px; font-size: .875rem; }
+[data-slot='dialog-footer'] { display: flex; align-items: center; gap: .5rem; }
+
+[data-slot='popover-content'] {
+  z-index: 40;
+  width: min(20rem, var(--radix-popover-content-available-width));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow);
+}
+[data-slot='popover-content'][data-state='closed'],
+[data-slot='tabs-content'][data-state='inactive'] { display: none; }
+[data-slot='tabs-trigger'] { user-select: none; cursor: pointer; }
+[data-slot='progress'] { overflow: hidden; width: 100%; height: 7px; border-radius: 999px; background: var(--muted); }
+[data-slot='progress-indicator'] { width: 100%; height: 100%; background: var(--primary); transition: transform 160ms ease; }
+[data-slot='slider'] { position: relative; display: flex; width: 100%; min-height: 28px; align-items: center; touch-action: none; user-select: none; }
+[data-slot='slider-track'] { position: relative; height: 6px; flex: 1; border-radius: 999px; background: var(--muted); }
+[data-slot='slider-range'] { position: absolute; height: 100%; border-radius: inherit; background: var(--primary); }
+[data-slot='slider-thumb'] {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  background: var(--card);
+}
+[data-slot='slider-thumb']:hover { box-shadow: 0 0 0 3px var(--accent); }
+.slider-marker {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--muted-foreground);
+}
+.slider-marker[data-filled='true'] { background: var(--primary-foreground); }
+[data-slot='checkbox'] {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  border: 1px solid var(--input);
+  border-radius: .25rem;
+  background: var(--card);
+}
+[data-slot='checkbox'][data-state='checked'] { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+[data-slot='checkbox-indicator'] { display: grid; place-items: center; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button[data-variant], [data-slot='progress-indicator'] { transition: none; }
+}

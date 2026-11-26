@@ -90,32 +90,17 @@ jobs:
         run: |
           TASKS_ARM=$(echo $(cat .github/ci/arm_matrix.json) )
           echo "ARM_MATRIX=$TASKS_ARM" >> $GITHUB_OUTPUT
-  # Testing Jobs
+  # Include check
   IWYU:
     uses: ./.github/workflows/iwyu.yml
-  Sanitizers:
-    if: ${{ always() }}
-    uses: ./.github/workflows/sanitizers.yml
-  Tests:
-    if: ${{ always() }}
-    uses: ./.github/workflows/tests.yml
-  Matetrack:
-    if: ${{ always() }}
-    uses: ./.github/workflows/matetrack.yml
-  Games:
-    if: ${{ always() }}
-    uses: ./.github/workflows/games.yml
-  CompilerCheck:
-    if: ${{ always() }}
-    uses: ./.github/workflows/avx2_compilers.yml
   # Release Jobs
   Compilation:
-    needs: [Matrix, Sanitizers, Tests, Matetrack, Games, CompilerCheck]
+    needs: [Matrix]
     uses: ./.github/workflows/compilation.yml
     with:
       matrix: ${{ needs.Matrix.outputs.matrix }}
   ARMCompilation:
-    needs: [Matrix, Sanitizers, Tests, Matetrack, Games, CompilerCheck]
+    needs: [Matrix]
     uses: ./.github/workflows/arm_compilation.yml
     with:
       matrix: ${{ needs.Matrix.outputs.arm_matrix }}

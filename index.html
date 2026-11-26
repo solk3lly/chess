@@ -1,223 +1,37 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta
-    name="description"
-    content="Lichess-inspired chess website using Chessground, chessops, and universal Supabase cloud persistence."
-  />
-  <title>Lichess-Inspired Chess</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Cormorant+Garamond:wght@600;700&display=swap"
-    rel="stylesheet"
-  />
-  <link rel="icon" href="./assets/pieces/2d/cburnett/wN.svg" type="image/svg+xml" />
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/@lichess-org/chessground@10.1.0/assets/chessground.base.css"
-  />
-  <script>
-  (() => {
-    try {
-      const mode = localStorage.getItem('cloud-chess-theme-mode-v1') || 'auto';
-      const resolved = mode === 'light' || mode === 'dark'
-        ? mode
-        : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      document.documentElement.dataset.theme = resolved;
-      document.documentElement.dataset.themeMode = mode;
-    } catch {
-      // no-op
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Play chess against Stockfish, review your moves, and practice positions from your games.">
+  <title>Chess Studio</title>
+  <link rel="icon" href="./assets/pieces/2d/cburnett/wN.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@lichess-org/chessground@10.1.0/assets/chessground.base.css" integrity="sha384-Y19gkNp1pMli91IsKOcB/yV6I8CMdolpGLROk0RUXmcn2bBcQZti24DCWQJpvWnO" crossorigin="anonymous">
+  <link rel="stylesheet" href="./ui/shadcn.css">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@19.3.1",
+      "react/jsx-runtime": "https://esm.sh/react@19.3.1/jsx-runtime",
+      "react-dom": "https://esm.sh/react-dom@19.3.1?external=react",
+      "react-dom/client": "https://esm.sh/react-dom@19.3.1/client?external=react",
+      "@radix-ui/react-alert-dialog": "https://esm.sh/@radix-ui/react-alert-dialog@1.2.1?bundle&external=react,react-dom",
+      "@radix-ui/react-checkbox": "https://esm.sh/@radix-ui/react-checkbox@1.4.1?bundle&external=react,react-dom",
+      "@radix-ui/react-dialog": "https://esm.sh/@radix-ui/react-dialog@1.3.1?bundle&external=react,react-dom",
+      "@radix-ui/react-popover": "https://esm.sh/@radix-ui/react-popover@1.3.1?bundle&external=react,react-dom",
+      "@radix-ui/react-progress": "https://esm.sh/@radix-ui/react-progress@1.2.1?bundle&external=react,react-dom",
+      "@radix-ui/react-slider": "https://esm.sh/@radix-ui/react-slider@1.6.1?bundle&external=react,react-dom",
+      "@radix-ui/react-slot": "https://esm.sh/@radix-ui/react-slot@1.5.0?bundle&external=react",
+      "@radix-ui/react-tabs": "https://esm.sh/@radix-ui/react-tabs@1.2.1?bundle&external=react,react-dom"
     }
-  })();
-</script>
-  <link rel="stylesheet" href="./styles.css?v=20260310j" />
+  }
+  </script>
 </head>
 <body>
-  <div class="app-shell">
-    <header class="hero">
-      <p class="kicker">Lichess Resources + Universal Supabase</p>
-      <h1>Cloud Chess Studio</h1>
-      <p class="hero-sub">
-        Chessground board UI, chessops move legality, Lichess 2D/3D media, and one shared
-        Supabase database for all player data.
-      </p>
-    </header>
-
-    <main class="layout">
-      <section class="board-panel">
-        <div class="status-card" id="status-card">
-          <span class="turn-dot" id="turn-dot"></span>
-          <span id="status-text">Loading board...</span>
-          <span class="sync-pill" id="sync-text">Sync pending</span>
-        </div>
-
-        <div class="board-frame">
-          <div class="board-arena">
-            <aside class="eval-column hidden" aria-live="polite" aria-label="Post-game evaluation bar">
-              <div class="eval-track" id="eval-track">
-                <div class="eval-fill eval-fill-black" id="eval-fill-black"></div>
-                <div class="eval-fill eval-fill-white" id="eval-fill-white"></div>
-                <div class="eval-readout" id="eval-readout">+0.00</div>
-              </div>
-            </aside>
-            <div class="board-stage">
-              <div
-                id="chessground"
-                class="cg-wrap board-shell"
-                data-piece-style="2d"
-                data-board-style="brown"
-              ></div>
-            </div>
-          </div>
-          <div class="arena-cleaner" id="arena-cleaner" aria-hidden="true">
-            <div class="arena-cleaner-card">
-              <div class="arena-cleaner-head">
-                <span class="bot-indicator" aria-hidden="true"></span>
-                <strong>Robot Cleaner</strong>
-              </div>
-              <div class="arena-cleaner-track">
-                <div class="arena-cleaner-bar" id="arena-cleaner-bar"></div>
-              </div>
-              <div class="arena-cleaner-text" id="arena-cleaner-text">Preparing arena...</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="captured-wrap">
-          <div class="captured-box">
-            <h3>Captured by White</h3>
-            <div class="captured-list" id="captured-white"></div>
-            <div class="score-row" id="score-white"></div>
-          </div>
-          <div class="captured-box">
-            <h3>Captured by Black</h3>
-            <div class="captured-list" id="captured-black"></div>
-            <div class="score-row" id="score-black"></div>
-          </div>
-        </div>
-
-        <div class="move-panel">
-          <div class="move-header">
-            <h3>Move History</h3>
-            <button class="ghost-btn" id="btn-clear-history" type="button">Clear Log &amp; Reset</button>
-          </div>
-          <div class="move-list" id="move-list"></div>
-        </div>
-
-        <div class="move-panel">
-          <div class="move-header">
-            <h3>Post-Game Analysis</h3>
-            <div class="analysis-nav-controls" aria-label="Analysis move navigation">
-              <button class="ghost-btn analysis-nav-btn" id="btn-analysis-prev" type="button" aria-label="Previous move">&lt;-</button>
-              <button class="ghost-btn analysis-nav-btn" id="btn-analysis-next" type="button" aria-label="Next move">-&gt;</button>
-            </div>
-          </div>
-          <div class="analysis-summary" id="analysis-summary">Analysis unlocks after checkmate or draw.</div>
-          <div class="analysis-list" id="analysis-list"></div>
-        </div>
-      </section>
-
-      <aside class="control-panel">
-        <section class="card account-card">
-          <h2>Account</h2>
-          <div class="account-meta">
-            <div>
-              <span class="meta-label">User</span>
-              <strong id="account-username">Loading...</strong>
-            </div>
-            <div>
-              <span class="meta-label">Handle</span>
-              <strong id="account-email">Loading...</strong>
-            </div>
-          </div>
-
-          <div class="button-row">
-            <button class="btn" id="btn-logout" type="button">Logout</button>
-            <a class="btn link-btn" href="./settings.html?v=20260310j">Settings</a>
-            <a class="btn link-btn" href="./login.html?v=20260309h">Auth Page</a>
-          </div>
-
-          <div class="cloud-status" id="cloud-status">Connecting to Supabase...</div>
-        </section>
-
-        <section class="card">
-          <h2>Game Actions</h2>
-          <div class="button-row">
-            <button class="btn" id="btn-new-game" type="button">New Game</button>
-            <button class="btn" id="btn-undo" type="button">Undo</button>
-          </div>
-        </section>        <section class="card bot-action-card">
-          <button class="btn btn-primary bot-launch-btn" id="btn-open-bot-modal" type="button">Play with Bot</button>
-        </section>
-      </aside>
-    </main>
-  </div>
-
-  <div class="bot-overlay" id="bot-overlay" aria-hidden="true">
-    <div class="bot-dialog" role="dialog" aria-modal="true" aria-labelledby="bot-title">
-      <div class="bot-dialog-head">
-        <h3 id="bot-title">Play with Bot</h3>
-        <button class="btn ghost-btn" id="bot-close" type="button">Close</button>
-      </div>
-
-      <div class="field-grid bot-grid">
-        <label>
-          You Play As
-          <select id="engine-player-color">
-            <option value="white">White</option>
-            <option value="black">Black</option>
-          </select>
-        </label>
-      </div>
-
-      <fieldset class="bot-mode-group">
-        <legend>Stockfish Mode</legend>
-        <label class="radio-row">
-          <input id="engine-mode-adaptive" type="radio" name="engine-mode" value="adaptive" />
-          <span>Adaptive ELO (auto-calibration)</span>
-        </label>
-        <label class="radio-row">
-          <input id="engine-mode-normal" type="radio" name="engine-mode" value="normal" />
-          <span>Normal (manual ELO)</span>
-        </label>
-      </fieldset>
-
-      <label class="bot-elo-field">
-        Stockfish ELO
-        <div class="elo-slider-wrap">
-          <input id="engine-elo" type="range" min="400" max="2200" step="50" value="900" />
-          <strong class="elo-slider-badge" id="engine-elo-value">900</strong>
-        </div>
-        <div class="range-meta">
-          <span id="engine-calibration-text">Calibration: 0/5 games</span>
-        </div>
-      </label>
-
-      <p class="bot-note" id="engine-adaptive-note">
-        Adaptive mode locks manual ELO and calibrates for at least 5 games. Calibration is optional in normal mode.
-      </p>
-
-      <div class="button-row">
-        <button class="btn btn-primary" id="btn-start-stockfish" type="button">Start</button>
-      </div>
-
-      <div class="engine-status" id="engine-status">Engine idle.</div>
-    </div>
-  </div>
-  <div class="promotion-overlay" id="promotion-overlay" aria-hidden="true">
-    <div class="promotion-dialog" role="dialog" aria-modal="true" aria-labelledby="promotion-title">
-      <h3 id="promotion-title">Choose Promotion</h3>
-      <p>Select the piece for your pawn.</p>
-      <div class="promotion-grid" id="promotion-grid"></div>
-      <button class="btn ghost-btn" id="promotion-cancel" type="button">Cancel</button>
-    </div>
-  </div>
-
-  <script type="module" src="./app.js?v=20260310j"></script>
+  <div id="studio-root"><p class="studio">Loading Chess Studio…</p></div>
+  <div id="studio-dialogs"></div>
+  <noscript>Enable JavaScript to play Chess Studio.</noscript>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
-
-
