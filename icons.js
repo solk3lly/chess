@@ -2,13 +2,17 @@ export const ICON_SPRITE = './assets/icons/phosphor.svg';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export const GRADE_META = {
-  Brilliant: { icon: 'sparkle-duotone', slug: 'brilliant' },
-  'Best move': { icon: 'star-duotone', slug: 'best' },
-  Excellent: { icon: 'seal-check-duotone', slug: 'excellent' },
-  Good: { icon: 'thumbs-up-duotone', slug: 'good' },
-  Inaccuracy: { icon: 'question-duotone', slug: 'inaccuracy' },
-  Mistake: { icon: 'warning-duotone', slug: 'mistake' },
-  Blunder: { icon: 'x-circle-duotone', slug: 'blunder' },
+  Book: { icon: 'book-open-duotone', slug: 'book', badge: 'B', bg: '#7c5e3c' },
+  Forced: { icon: 'arrow-fat-right-duotone', slug: 'forced', badge: '→', bg: '#5a6672' },
+  Brilliant: { icon: 'sparkle-duotone', slug: 'brilliant', badge: '!!', bg: '#0b7a70' },
+  Great: { icon: 'lightning-duotone', slug: 'great', badge: '!', bg: '#2563a6' },
+  'Best move': { icon: 'star-duotone', slug: 'best', badge: '★', bg: '#246b47' },
+  Excellent: { icon: 'seal-check-duotone', slug: 'excellent', badge: '✓', bg: '#2f6e4d' },
+  Good: { icon: 'thumbs-up-duotone', slug: 'good', badge: '✓', bg: '#476278' },
+  Inaccuracy: { icon: 'question-duotone', slug: 'inaccuracy', badge: '?!', bg: '#b07200' },
+  Mistake: { icon: 'warning-duotone', slug: 'mistake', badge: '?', bg: '#c2510a' },
+  Miss: { icon: 'prohibit-duotone', slug: 'miss', badge: '×', bg: '#b8324e' },
+  Blunder: { icon: 'x-circle-duotone', slug: 'blunder', badge: '??', bg: '#b52626' },
 };
 
 export const OUTCOME_ICONS = {
@@ -29,7 +33,7 @@ export function icon(name, className = '', doc = document) {
   return svg;
 }
 
-const gradeMeta = grade => (Object.hasOwn(GRADE_META, grade) ? GRADE_META[grade] : null);
+export const gradeMeta = grade => (Object.hasOwn(GRADE_META, grade) ? GRADE_META[grade] : null);
 
 export function gradeIcon(grade, className = '', doc = document) {
   const meta = gradeMeta(grade);
@@ -52,4 +56,18 @@ export function gradeBadge(grade, label = grade, doc = document) {
   text.textContent = label;
   badge.append(text);
   return badge;
+}
+
+/**
+ * Compact circular SVG badge for Chessground `customSvg` overlays anchored on a destination square.
+ */
+export function boardGradeSvg(grade) {
+  const meta = gradeMeta(grade);
+  if (!meta) return null;
+  const fontSize = meta.badge.length > 1 ? 15 : 18;
+  return `<g transform="translate(76,22)">` +
+    `<circle r="19" fill="${meta.bg}" stroke="#fffdf7" stroke-width="3.2"/>` +
+    `<text x="0" y="1" text-anchor="middle" dominant-baseline="central" ` +
+    `fill="#fffdf7" font-family="system-ui,sans-serif" font-weight="800" font-size="${fontSize}">${meta.badge}</text>` +
+    `</g>`;
 }

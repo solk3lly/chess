@@ -1,9 +1,10 @@
 import { createElement as h, Fragment } from 'react';
 import {
   Alert, AlertDescription, Badge, Button, ButtonGroup, Card, CardContent, CardDescription,
-  CardHeader, CardTitle, Icon, Input, Label, NativeSelect, TabsContent, TabsList, TabsTrigger,
+  CardHeader, CardTitle, Icon, Input, Label, NativeSelect, NativeSelectOption, TabsContent, TabsList, TabsTrigger,
 } from './ui/shadcn.js';
 import { renderUI } from './ui/render.js';
+import { PRESET_ORDER, REVIEW_PRESETS } from './review.js';
 import { DifficultyPicker, ReviewTabs } from './studio-widgets.js';
 import { BOT_PROFILES, DIFFICULTY_ORDER, LEVELS } from './studio-game.js';
 
@@ -26,6 +27,7 @@ function SiteHeader() {
           h("span", null, "Practice")
         )
       ),
+      h(Button, { type: "button", id: "shortcuts-open", variant: "ghost", size: "sm" }, "Keyboard shortcuts"),
       h(Button, { type: "button", id: "settings-open", className: "settings-button", variant: "outline" },
         h(Icon, { name: "gear-six" }),
         h("span", null, "Settings")
@@ -47,7 +49,13 @@ function BoardArea() {
         h(Icon, { name: "arrows-down-up" })
       )
     ),
-    h("div", { id: "chessground", className: "cg-wrap board-shell", "data-board-style": "brown", "data-piece-style": "2d" }),
+    h("div", { className: "board-stage" },
+      h("div", { id: "eval-bar", className: "eval-bar", hidden: true, role: "img", "aria-label": "Position evaluation: even" },
+        h("div", { id: "eval-bar-fill", className: "eval-bar-fill" }),
+        h("span", { id: "eval-bar-label", className: "eval-bar-label" }, "0.0")
+      ),
+      h("div", { id: "chessground", className: "cg-wrap board-shell", "data-board-style": "brown", "data-piece-style": "2d" })
+    ),
     h(ButtonGroup, { id: "replay-controls", className: "replay-controls", hidden: true },
       h(Button, { type: "button", className: "icon-button", id: "replay-start", "aria-label": "Starting position", variant: "outline", size: "icon" },
         h(Icon, { name: "caret-line-left" })
@@ -62,6 +70,11 @@ function BoardArea() {
       h(Button, { type: "button", className: "icon-button", id: "replay-end", "aria-label": "Final position", variant: "outline", size: "icon" },
         h(Icon, { name: "caret-line-right" })
       )
+    ),
+    h("details", { className: "board-position-details" },
+      h("summary", null, "Board position"),
+      h("p", { id: "board-white-pieces" }),
+      h("p", { id: "board-black-pieces" })
     ),
     h("form", { id: "move-form", className: "move-form" },
       h(Label, { htmlFor: "move-input" }, "Enter a move"),
@@ -80,7 +93,7 @@ function BoardArea() {
 function PlayPanel() {
   return h(Card, { id: "play-panel", className: "panel", "aria-labelledby": "play-title" },
     h(CardHeader, { className: "panel-header" },
-      h(CardTitle, { id: "play-title" }, "Play the bot"),
+      h(CardTitle, { id: "play-title", tabIndex: -1 }, "Play the bot"),
       h("div", { className: "play-header-meta" },
         h("p", { id: "match-description" }, "You play White"),
         h(DifficultyPicker, { className: "difficulty-picker", id: "difficulty-picker" },
@@ -186,16 +199,35 @@ function ReviewPanel() {
         ),
         h(CardTitle, { id: "review-title", tabIndex: -1 }, "Game Review")
       ),
-      h(NativeSelect, { id: "review-games", "aria-label": "Completed game", hidden: true })
+      h("div", { id: "review-toolbar-controls", className: "review-toolbar-controls", hidden: true },
+        h(NativeSelect, { id: "review-games", "aria-label": "Completed game" }),
+        h(NativeSelect, { id: "review-preset", "aria-label": "Analysis depth preset", defaultValue: "quick" },
+          PRESET_ORDER.map(key => h(NativeSelectOption, { key, value: key }, REVIEW_PRESETS[key].label))
+        ),
+        h(Button, { type: "button", id: "review-reanalyze", hidden: true, variant: "outline" }, "Reanalyze")
+      )
     ),
     h(CardContent, { id: "review-empty", className: "panel-section" },
-      h("p", { className: "muted" }, "Finish a game against Stockfish to review it here."),
+      h("p", { className: "muted" }, "Finish a game against a bot to review it here."),
       h(Button, { type: "button", "data-go": "play", variant: "default" },
         h(Icon, { name: "strategy" }),
         h("span", null, "Go to Play")
       )
     ),
     h("div", { id: "review-content", hidden: true },
+      h(Alert, { id: "maia-review-prompt", className: "maia-prompt", hidden: true },
+        h("div", { className: "maia-prompt-body" },
+          h(Icon, { name: "brain", className: "icon maia-prompt-icon" }),
+          h("p", { id: "maia-prompt-text" }, "Download Maia-3 (~22 MB, cached locally) for human trap detection, move findability, and play-level estimates?")
+        ),
+        h("div", { className: "maia-prompt-actions" },
+          h(Button, { type: "button", id: "maia-prompt-enable", variant: "default", size: "sm" },
+            h(Icon, { name: "download-simple" }),
+            h("span", null, "Enable Maia-3")
+          ),
+          h(Button, { type: "button", id: "maia-prompt-skip", variant: "ghost", size: "sm" }, "Stockfish only")
+        )
+      ),
       h("div", { id: "review-progress", className: "panel-inset review-progress", hidden: true },
         h("p", { id: "review-message", role: "status" }),
         h("div", { id: "review-meter" }),
@@ -203,6 +235,12 @@ function ReviewPanel() {
           h(Icon, { name: "arrow-clockwise" }),
           h("span", null, "Retry analysis")
         )
+      ),
+      h("p", { id: "review-analysis-updated", role: "status", className: "muted review-update", hidden: true },
+        "Analysis updated. Select a line to inspect the new result."),
+      h("div", { id: "review-overview", className: "review-overview", hidden: true },
+        h("div", { id: "review-opening", className: "review-opening", hidden: true }),
+        h("div", { id: "review-graph", className: "review-graph", "aria-label": "Evaluation graph" })
       ),
       h(ReviewTabs, null,
         h(TabsList, { id: "review-tabs", className: "review-tabs", "aria-label": "Game review views" },
@@ -228,13 +266,6 @@ function ReviewPanel() {
         h(TabsContent, { className: "review-pane", value: "accuracy", forceMount: true },
           h("p", { id: "review-accuracy-pending", className: "muted" }, "Game accuracy appears when every move has been analyzed."),
           h("div", { id: "review-summary", hidden: true },
-            h("div", { className: "accuracy-heading" },
-              h("div", null,
-                h("h2", { id: "accuracy-heading" }, "Your game accuracy"),
-                h("p", { className: "muted" }, "Based on Stockfish’s evaluations")
-              ),
-              h("strong", { id: "overall-accuracy", className: "accuracy-number" })
-            ),
             h("div", { id: "accuracy-details", className: "accuracy-details" })
           )
         )
@@ -246,7 +277,7 @@ function ReviewPanel() {
 function PracticePanel() {
   return h(Card, { id: "practice-panel", className: "panel", "aria-labelledby": "practice-title", hidden: true },
     h(CardHeader, { className: "panel-header" },
-      h(CardTitle, { id: "practice-title" }, "Practice positions"),
+      h(CardTitle, { id: "practice-title", tabIndex: -1 }, "Practice positions"),
       h(CardDescription, null, "Try a new move in a position from one of your games.")
     ),
     h(CardContent, { id: "practice-empty", className: "panel-section" },

@@ -4,52 +4,56 @@ import { standardUci } from './game-state.js';
 export const DIFFICULTY_ORDER = ['relaxed', 'standard', 'strong', 'maximum'];
 
 export const LEVELS = {
-  relaxed: { label: 'Relaxed', skill: 0, elo: null, time: 160 },
-  standard: { label: 'Standard', skill: 2, elo: 1450, time: 350 },
-  strong: { label: 'Strong', skill: 8, elo: 2050, time: 700 },
-  maximum: { label: 'Maximum', skill: 20, elo: null, time: 1200 },
+  relaxed: { label: 'Relaxed', elo: 1320, time: 200 },
+  standard: { label: 'Standard', elo: 1450, time: 400 },
+  strong: { label: 'Strong', elo: 2050, time: 800 },
+  maximum: { label: 'Maximum', elo: null, time: 1600 },
 };
 
-function eloProfile(label, elo, description) {
-  return { label, listLabel: `${label} · ${elo} Elo target`, description, elo };
+function eloProfile(label, targets, time = 400) {
+  return { label, listLabel: `${label} · ${targets[0]}–${targets.at(-1)} Elo target`, targets, time };
 }
 
 export const BOT_PROFILES = {
   default: {
     label: 'Stockfish 19',
     listLabel: 'Default',
-    description: 'Balanced Stockfish 19',
+    description: 'Standard search time',
   },
   blitz: {
     label: 'Stockfish Blitz',
     listLabel: 'Stockfish Blitz',
-    description: 'Fast replies · shorter think time',
+    description: 'Half the default search time',
+    timeScale: 0.5,
   },
   classical: {
     label: 'Stockfish Classical',
     listLabel: 'Stockfish Classical',
-    description: 'Deep calculation · longer think time',
+    description: 'More time to calculate each move',
+    timeScale: 1.5,
   },
   elo250: {
     label: 'Rookie',
-    listLabel: 'Rookie · 250 Elo target',
-    description: 'A forgiving opponent that sometimes misses simple moves.',
+    listLabel: 'Rookie · Maia-3',
+    description: 'Human-like moves. The model downloads on first use.',
+    maiaRatings: [600, 750, 900, 1000],
   },
-  elo1320: eloProfile('Beginner', 1320, 'Lowest native Stockfish target'),
-  elo1450: eloProfile('Casual', 1450, 'Practice spotting simple tactics'),
-  elo1600: eloProfile('Intermediate', 1600, 'Practice defending against threats'),
-  elo1750: eloProfile('Club', 1750, 'Practice looking a few moves ahead'),
-  elo1900: eloProfile('Advanced', 1900, 'Practice finding tactical opportunities'),
-  elo2050: eloProfile('Competitive', 2050, 'Practice holding difficult positions'),
-  elo2200: eloProfile('Expert', 2200, 'Practice calculating longer lines'),
-  elo2500: eloProfile('Elite', 2500, 'Practice against a strong opponent'),
-  elo2800: eloProfile('Champion', 2800, 'A high-strength Stockfish target'),
-  elo3100: eloProfile('Extreme', 3100, 'Highest preset with an Elo target'),
+  elo1320: eloProfile('Beginner', [1320, 1400, 1450, 1500]),
+  elo1450: eloProfile('Casual', [1380, 1450, 1550, 1650]),
+  elo1600: eloProfile('Intermediate', [1500, 1600, 1700, 1800]),
+  elo1750: eloProfile('Club', [1650, 1750, 1850, 1950]),
+  elo1900: eloProfile('Advanced', [1800, 1900, 2000, 2100]),
+  elo2050: eloProfile('Competitive', [1950, 2050, 2150, 2250], 500),
+  elo2200: eloProfile('Expert', [2100, 2200, 2300, 2400], 750),
+  elo2500: eloProfile('Elite', [2400, 2500, 2600, 2700], 1200),
+  elo2800: eloProfile('Champion', [2700, 2800, 2900, 3000], 2000),
+  elo3100: eloProfile('Extreme', [3000, 3100, 3150, 3190], 2800),
   max: {
     label: 'Stockfish Max',
     listLabel: 'Stockfish Max',
-    description: 'Stockfish Lite with strength limiting off',
-    times: { relaxed: 200, standard: 450, strong: 850, maximum: 1500 },
+    description: 'No Elo limit · twice the default search time',
+    timeScale: 2,
+    unlimited: true,
   },
 };
 
@@ -57,29 +61,37 @@ export function botSearchConfig(difficulty, bot = 'default') {
   const levelKey = Object.hasOwn(LEVELS, difficulty) ? difficulty : 'standard';
   const botKey = Object.hasOwn(BOT_PROFILES, bot) ? bot : 'default';
   const profile = BOT_PROFILES[botKey];
-  const base = { ...LEVELS[levelKey], depth: null, bot: botKey, botLabel: profile.label };
+  const { label, elo, time } = LEVELS[levelKey];
+  const base = { label, bot: botKey, botLabel: profile.label };
+  const index = DIFFICULTY_ORDER.indexOf(levelKey);
 
-  if (botKey === 'elo250') {
-    return { ...base, skill: 0, elo: null, lines: 3 };
+  if (profile.maiaRatings) {
+    return { ...base, maiaRating: profile.maiaRatings[index] };
   }
-  if (botKey === 'blitz') {
-    return { ...base, time: Math.round(base.time * 0.45) };
+  if (profile.targets) {
+    return { ...base, elo: profile.targets[index], time: profile.time };
   }
-  if (botKey === 'classical') {
-    return { ...base, time: Math.round(base.time * 1.75) };
-  }
-  if (botKey === 'max') {
-    return { ...base, skill: 20, elo: null, time: profile.times[levelKey] };
-  }
-  return { ...base, elo: profile.elo ?? base.elo };
+  return { ...base, elo: profile.unlimited ? null : elo, time: time * (profile.timeScale ?? 1) };
 }
 
-export const botSearchTime = (difficulty, bot) => `${botSearchConfig(difficulty, bot).time / 1000} s per move`;
+export function botSearchSummary(difficulty, bot) {
+  const { elo, time, maiaRating } = botSearchConfig(difficulty, bot);
+  if (maiaRating !== undefined) return `Maia-3 · Lichess ${maiaRating} style`;
+  const strength = elo === null ? 'No Elo limit' : `${elo} Elo target`;
+  return `${strength} · up to ${time / 1000} s per move`;
+}
 
 export const opposite = color => color === 'white' ? 'black' : 'white';
 export const fenAt = (game, ply) => game.moves[ply - 1]?.fen ?? fen.INITIAL_FEN;
 export const positionAt = (game, ply) => positionFromFen(fenAt(game, ply));
 export const positionFromFen = value => Chess.fromSetup(fen.parseFen(value).unwrap()).unwrap();
+
+export function maiaPosition(game, selfElo) {
+  const ply = game.moves.length;
+  const start = Math.max(0, ply - 7);
+  const priorFens = Array.from({ length: ply - start }, (_, index) => fenAt(game, start + index));
+  return { fen: fenAt(game, ply), priorFens, selfElo };
+}
 
 function gameId() {
   return globalThis.crypto.randomUUID?.() ?? Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
@@ -116,26 +128,13 @@ function* legalCandidates(position) {
   }
 }
 
-export function rookieMove(position, { move, lines }, random = Math.random) {
-  const best = move && legalMove(position, move);
-  if (!best) return null;
-  const bestUci = standardUci(position, best);
-  const recommendations = new Set([bestUci]);
-  for (const line of lines) {
-    const candidate = legalMove(position, line.pv[0]);
-    if (candidate) recommendations.add(standardUci(position, candidate));
-  }
-
-  const alternatives = [];
-  for (const candidate of legalCandidates(position)) {
+export function mateInOne(position) {
+  for (const move of legalCandidates(position)) {
     const after = position.clone();
-    after.play(candidate);
-    const uci = standardUci(position, candidate);
-    if (after.isCheckmate()) return uci;
-    if (!recommendations.has(uci)) alternatives.push(uci);
+    after.play(move);
+    if (after.isCheckmate()) return standardUci(position, move);
   }
-  if (!alternatives.length || random() >= 0.70) return bestUci;
-  return alternatives[Math.floor(random() * alternatives.length)];
+  return null;
 }
 
 export function needsPromotion(position, uci) {

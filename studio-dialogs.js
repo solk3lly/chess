@@ -7,7 +7,9 @@ import {
 import { renderUI } from './ui/render.js';
 import { BOARD_THEMES, PIECE_THEMES, pieceImageSrc } from './board-themes.js';
 import { OUTCOME_ICONS } from './icons.js';
-import { BOT_PROFILES, DIFFICULTY_ORDER, LEVELS, botSearchTime } from './studio-game.js';
+import { PRESET_ORDER, REVIEW_PRESETS } from './review.js';
+import { BOT_PROFILES, DIFFICULTY_ORDER, LEVELS, botSearchSummary } from './studio-game.js';
+import { shortcutGroups } from './keyboard.js';
 import { sliderMarkers } from './studio-widgets.js';
 
 let activeDialog = null;
@@ -59,24 +61,31 @@ const settingsFields = [
   ['theme', 'Theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]],
   ['board', 'Board', Object.entries(BOARD_THEMES).map(([key, theme]) => [key, theme.label])],
   ['pieces', 'Pieces', Object.entries(PIECE_THEMES).map(([key, theme]) => [key, theme.label])],
+  ['reviewPreset', 'Review depth', PRESET_ORDER.map(key => [key, REVIEW_PRESETS[key].label])],
+  ['maiaReview', 'Maia-3 insights', [
+    ['ask', 'Ask first'],
+    ['enabled', 'On (~22 MB)'],
+    ['disabled', 'Off'],
+  ]],
 ];
 
 function SettingsDifficulty({ index, setIndex, bot }) {
   const difficulty = DIFFICULTY_ORDER[index];
   const label = LEVELS[difficulty].label;
+  const summary = botSearchSummary(difficulty, bot);
   return h('div', { className: 'field settings-difficulty' },
     h('div', { className: 'settings-difficulty-head' },
       h(Label, { htmlFor: 'settings-difficulty-slider' }, 'Bot difficulty'),
       h('strong', { className: 'difficulty-inline-label' }, label)),
     h(Slider, {
-      thumbId: 'settings-difficulty-slider', label: 'Bot difficulty', valueText: label,
+      thumbId: 'settings-difficulty-slider', label: 'Bot difficulty', valueText: `${label}, ${summary}`,
       min: 0, max: DIFFICULTY_ORDER.length - 1, step: 1, value: [index],
       onValueChange: ([next]) => setIndex(next), markers: sliderMarkers(DIFFICULTY_ORDER.length, index),
     }),
     h('input', { type: 'hidden', name: 'difficulty', value: difficulty }),
     h('div', { className: 'stepped-slider-labels', 'aria-hidden': true },
       DIFFICULTY_ORDER.map(key => h('span', { key }, LEVELS[key].label))),
-    h('small', { className: 'muted' }, botSearchTime(difficulty, bot)));
+    h('small', { className: 'muted' }, summary));
 }
 
 function SettingsContent({ id, close, initial }) {
@@ -85,7 +94,7 @@ function SettingsContent({ id, close, initial }) {
   function save(event) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    close({ ...Object.fromEntries(data), sound: data.has('sound') });
+    close({ ...Object.fromEntries(data), sound: data.has('sound'), shortcuts: data.has('shortcuts') });
   }
   const field = ([name, label, options]) => h(SelectField, {
     key: name, name, label, options, value: initial[name], autoFocus: name === 'color',
@@ -95,14 +104,17 @@ function SettingsContent({ id, close, initial }) {
     h('form', { onSubmit: save },
       h(DialogHeader, { className: 'dialog-heading' },
         h(DialogTitle, null, 'Settings'), h(CloseButton, { close, label: 'Close settings' })),
-      h(DialogDescription, null, 'Preferences stay in this browser. Bot settings update immediately; side color applies to your next game.'),
+      h(DialogDescription, null, 'Preferences stay in this browser. Review depth applies the next time you analyze a game. Side color applies to your next game.'),
       h('div', { className: 'settings-grid' },
         field(botField),
         h(SettingsDifficulty, { index, setIndex, bot }),
         settingsFields.map(field),
-        h('div', { className: 'check-field' },
+        h('div', { className: 'check-field settings-wide' },
           h(Checkbox, { id: 'settings-sound', name: 'sound', defaultChecked: initial.sound }),
-          h(Label, { htmlFor: 'settings-sound' }, h(Icon, { name: 'speaker-high' }), 'Move sounds'))),
+          h(Label, { htmlFor: 'settings-sound' }, h(Icon, { name: 'speaker-high' }), 'Move sounds')),
+        h('div', { className: 'check-field settings-wide' },
+          h(Checkbox, { id: 'settings-shortcuts', name: 'shortcuts', defaultChecked: initial.shortcuts }),
+          h(Label, { htmlFor: 'settings-shortcuts' }, 'Enable additional keyboard shortcuts'))),
       h(DialogFooter, null, h(Button, { type: 'submit' }, h(Icon, { name: 'check' }), 'Save settings'))));
 }
 
@@ -161,6 +173,24 @@ function GameOverContent({ id, close, title, reason, outcome, openReview, retry 
         h(Icon, { name: 'arrow-clockwise' }), 'Retry analysis')));
 }
 
+function ShortcutsContent({ id, close, enabled }) {
+  return h(DialogContent, { id, className: 'shortcuts-dialog' },
+    h(DialogHeader, { className: 'dialog-heading' },
+      h(DialogTitle, null, 'Keyboard shortcuts'), h(CloseButton, { close, label: 'Close keyboard shortcuts' })),
+    h(DialogDescription, null, enabled
+      ? 'Use Tab to reach controls and Enter or Space to activate them.'
+      : 'Additional shortcuts are off. You can turn them on in Settings.'),
+    h('p', { className: 'shortcuts-note' },
+      'In Review, use ', h('kbd', null, '←'), ' and ', h('kbd', null, '→'),
+      ' to step through a line, ', h('kbd', null, 'Home'), ' and ', h('kbd', null, 'End'),
+      ' to jump to its ends, and ', h('kbd', null, 'Esc'), ' to return to the game.'),
+    enabled && shortcutGroups.map(({ label, bindings }) => h('section', { key: label, className: 'shortcut-group' },
+      h('h3', null, label),
+      h('dl', { className: 'shortcut-list' }, bindings.map(([key, action, description]) =>
+        h('div', { key: action }, h('dt', null, h('kbd', null, key.toUpperCase())), h('dd', null, description)))))));
+}
+
+export const showShortcutsDialog = enabled => openDialog('shortcuts-dialog', ShortcutsContent, { enabled });
 export const showSettingsDialog = initial => openDialog('settings-dialog', SettingsContent, { initial });
 export const confirmAction = (title, description, label) => openDialog('confirm-dialog', ConfirmContent, { title, description, label }, true);
 export const chooseDrawMove = moves => openDialog('draw-claim-dialog', DrawClaimContent, { moves });

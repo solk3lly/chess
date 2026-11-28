@@ -66,12 +66,13 @@ export function selectReviewMove(current) {
 export function labelReviewMove(row) {
   const button = byId('review-moves').querySelector(`[data-ply="${row.ply}"]`);
   if (!button) return;
-  const accuracy = row.accuracy + '%';
+  const display = row.provisional ? 'Provisional' : row.isBook ? 'Book' : row.isForced ? 'Forced' : row.accuracy + '%';
   const meta = button.lastElementChild;
-  const iconNode = gradeIcon(row.grade, 'move-grade-icon');
-  const score = element('span', accuracy, 'move-choice-accuracy');
+  const iconNode = row.provisional ? null : gradeIcon(row.grade, 'move-grade-icon');
+  const score = element('span', display, 'move-choice-accuracy');
   meta.replaceChildren(...(iconNode ? [iconNode, score] : [score]));
-  button.setAttribute('aria-label', `${moveLabel(row.ply, row.san)}, ${accuracy} accuracy${row.grade ? `, ${row.grade}` : ''}`);
+  const aria = row.provisional ? 'Provisional estimate' : row.isBook ? 'Opening book move' : row.isForced ? 'Forced move' : `${display} accuracy`;
+  button.setAttribute('aria-label', `${moveLabel(row.ply, row.san)}, ${aria}${!row.provisional && row.grade ? `, ${row.grade}` : ''}`);
 }
 
 export function setOptions(id, entries, value, label) {

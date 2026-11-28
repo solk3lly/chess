@@ -1,5 +1,6 @@
 import { BOT_PROFILES, DIFFICULTY_ORDER } from './studio-game.js';
 import { BOARD_THEMES, PIECE_THEMES } from './board-themes.js';
+import { PRESET_ORDER } from './review.js';
 
 export const DEFAULT_SETTINGS = {
   color: 'white',
@@ -9,6 +10,9 @@ export const DEFAULT_SETTINGS = {
   board: 'brown',
   pieces: '2d',
   sound: true,
+  shortcuts: true,
+  reviewPreset: 'quick',
+  maiaReview: 'ask',
 };
 
 const SETTINGS_KEY = 'chess-studio-preferences-v1';
@@ -20,6 +24,9 @@ const SETTINGS_OPTIONS = {
   board: Object.keys(BOARD_THEMES),
   pieces: Object.keys(PIECE_THEMES),
   sound: [true, false],
+  reviewPreset: PRESET_ORDER,
+  shortcuts: [true, false],
+  maiaReview: ['ask', 'enabled', 'disabled'],
 };
 
 export function preferences(storage = globalThis.localStorage) {
@@ -87,4 +94,12 @@ export async function saveGame(db, game, expectedRevision) {
 
 export function writeLocal(db, collection, key, value) {
   return write(db, [collection], transaction => transaction.objectStore(collection).put(value, key));
+}
+
+export function saveReview(db, id, review, checkpointKey) {
+  return write(db, ['reviews'], transaction => {
+    const store = transaction.objectStore('reviews');
+    store.put(review, id);
+    store.delete(checkpointKey);
+  });
 }
